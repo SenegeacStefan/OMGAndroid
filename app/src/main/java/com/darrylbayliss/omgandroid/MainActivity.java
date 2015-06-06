@@ -1,24 +1,29 @@
 package com.darrylbayliss.omgandroid;
 
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Bundle;
 import android.support.v4.view.MenuItemCompat;
 import android.support.v7.app.ActionBarActivity;
-import android.os.Bundle;
 import android.support.v7.widget.ShareActionProvider;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.loopj.android.http.AsyncHttpClient;
+import com.loopj.android.http.JsonHttpResponseHandler;
+
+import org.json.JSONObject;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -30,13 +35,14 @@ public class MainActivity extends ActionBarActivity implements View.OnClickListe
     Button mainButton;
     EditText mainEditText;
     ListView mainListView;
-    ArrayAdapter mArrayAdapter;
+    JSONAdapter mJSONAdapter;
     ArrayList mNameList = new ArrayList();
     ShareActionProvider mShareActionProvider;
     private static final String PREFS = "prefs";
     private static final String PREF_NAME = "name";
     private static final String QUERY_URL = "http://openlibrary.org/search.json?q=";
     SharedPreferences mSharedPreferences;
+    ProgressDialog mDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,17 +64,21 @@ public class MainActivity extends ActionBarActivity implements View.OnClickListe
         // 4. Access the ListView
         mainListView = (ListView) findViewById(R.id.main_listview);
 
+        mJSONAdapter = new JSONAdapter(this, getLayoutInflater());
+        mainListView.setAdapter(mJSONAdapter);
         // Create an ArrayAdapter for the ListView
-        mArrayAdapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1,mNameList);
 
         // Set the ListView to use the ArrayAdapter
-        mainListView.setAdapter(mArrayAdapter);
 
         // 5. Set this activity to react to list items being pressed
         mainListView.setOnItemClickListener(this);
 
         // 7. Greet the user, or ask for their name if new
         displayWelcome();
+
+        mDialog = new ProgressDialog(this);
+        mDialog.setMessage("Searching for books");
+        mDialog.setCancelable(false);
     }
 
 
@@ -112,7 +122,7 @@ public class MainActivity extends ActionBarActivity implements View.OnClickListe
 
     @Override
     public void onClick(View v) {
-        // Take what was typed into the EditText
+       /* // Take what was typed into the EditText
         // and use in TextView
         mainTextView.setText(mainEditText.getText().toString()
                 + " is learning Android development!");
@@ -123,15 +133,18 @@ public class MainActivity extends ActionBarActivity implements View.OnClickListe
 
         // 6. The text you'd like to share has changed,
         // and you need to update
-        setShareIntent();
+        setShareIntent();*/
+        queryBooks(mainEditText.getText().toString());
     }
 
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+        JSONObject jsonObject = (JSONObject) mJSONAdapter.getItem(position);
+        String coverID = jsonObject.optString("cover_i","");
+        Intent detailIntent = new Intent(this, DetailActivity.class);
 
-        // Log the item's position and contents
-        // to the console in Debug
-        Log.d("omg android", position + ": " + mNameList.get(position));
+        detailIntent.putExtra("coverID",coverID);
+        startActivity(detailIntent);
     }
 
     public void displayWelcome() {
@@ -197,6 +210,25 @@ public class MainActivity extends ActionBarActivity implements View.OnClickListe
             e.printStackTrace();
             Toast.makeText(this,"Eroare --:" + e.getMessage(),Toast.LENGTH_LONG).show();
         }
+
+        AsyncHttpClient client = new AsyncHttpClient();
+        mDialog.show();
+        client.get(QUERY_URL + urlString,
+                new JsonHttpResponseHandler(){
+                    @Override
+                    public void onSuccess(JSONObject jsonObject) {
+                        Toast.makeText(getApplicationContext(),"Success!",Toast.LENGTH_LONG).show();
+                        mJSONAdapter.updateData(jsonObject.optJSONArray("docs"));
+                        mDialog.dismiss();
+                    }
+                    @Override
+                    public void onFailure(int statusCode, Throwable throwable, JSONObject error) {
+                        Toast.makeText(getApplicationContext(),"Error:" + statusCode + " " + throwable.getMessage(),
+                                Toast.LENGTH_LONG).show();
+                        Log.d("omg android", statusCode + " " + throwable.getMessage());
+                        mDialog.dismiss();
+                    }
+                });
 
     }
 
